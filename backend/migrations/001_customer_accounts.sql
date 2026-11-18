@@ -10,6 +10,7 @@ create table if not exists public.customer_profiles (
 alter table public.customer_profiles enable row level security;
 revoke all on public.customer_profiles from anon;
 grant select on public.customer_profiles to authenticated;
+drop policy if exists "customers can read their own profile" on public.customer_profiles;
 create policy "customers can read their own profile"
   on public.customer_profiles for select to authenticated using (auth.uid() = user_id);
 
@@ -38,8 +39,10 @@ create table if not exists public.account_deletion_requests (
 alter table public.account_deletion_requests enable row level security;
 revoke all on public.account_deletion_requests from anon;
 grant select on public.account_deletion_requests to authenticated;
+drop policy if exists "customers can view their deletion requests" on public.account_deletion_requests;
 create policy "customers can view their deletion requests"
   on public.account_deletion_requests for select to authenticated using (auth.uid() = user_id);
+drop policy if exists "customers can request their own account deletion" on public.account_deletion_requests;
 create policy "customers can request their own account deletion"
   on public.account_deletion_requests for insert to authenticated
   with check (auth.uid() = user_id and status = 'pending');

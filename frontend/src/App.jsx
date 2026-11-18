@@ -54,7 +54,14 @@ export default function App() {
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      setSession(nextSession);
+      if (event === "PASSWORD_RECOVERY") {
+        setAuthMode("set-password");
+        setAuthOpen(true);
+        setAuthMessage("Choose a new password for your account.");
+      }
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -90,6 +97,18 @@ export default function App() {
     if (!supabase) return setAuthMessage("Hosted account service is not configured yet. Set the Vite public Supabase URL and anon key, then restart the dashboard.");
     if (authMode === "signup" && !termsAccepted) return setAuthMessage("Please accept the terms and privacy policy to create an account.");
     try {
+      if (authMode === "recover") {
+        const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+        if (recoveryError) throw recoveryError;
+        setAuthMessage("If an account matches that email, a password reset link is on its way.");
+        return;
+      }
+      if (authMode === "set-password") {
+        const { error: passwordError } = await supabase.auth.updateUser({ password });
+        if (passwordError) throw passwordError;
+        setPassword(""); setAuthMessage("Your password was updated."); setAuthOpen(false);
+        return;
+      }
       const result = authMode === "signup"
         ? await supabase.auth.signUp({ email: email.trim(), password })
         : await supabase.auth.signInWithPassword({ email: email.trim(), password });
@@ -153,7 +172,7 @@ export default function App() {
       </main>
       {showNotice && <aside className="privacy-banner" aria-label="Privacy notice"><span><LockKeyhole size={15} />No tracking cookies or ads. Inputs remain in this tab for now.</span><button onClick={() => { sessionStorage.setItem("docuguard-notice-seen", "1"); setShowNotice(false); }}>Continue</button><button className="banner-link" onClick={() => setPolicy("cookies")}>Cookie policy</button></aside>}
       {showIntro && <div className="dialog-backdrop"><section className="welcome-dialog" role="dialog" aria-modal="true" aria-labelledby="welcome-title"><div className="welcome-icon"><ShieldCheck size={24} /></div><p className="section-label">WELCOME TO DOCUGUARD</p><h2 id="welcome-title">Documentation drift,<br />with proof.</h2><p>When code changes but docs do not, DocuGuard finds a mismatch and points to both sides. You decide what to update.</p><div className="welcome-steps"><div><span>01</span><b>Compare Git versions</b><small>Choose a Python repository and two refs.</small></div><div><span>02</span><b>Inspect the evidence</b><small>Review exact code and Markdown lines.</small></div><div><span>03</span><b>Apply only what you trust</b><small>Suggestions are optional; your files stay untouched.</small></div></div><div className="account-note"><LockKeyhole size={15} /><span>{authStatus}. Repository files stay on this machine; account records contain only identity and security status.</span></div><div className="welcome-actions"><button className="primary-button" onClick={dismissIntro}><Play size={14} />Start a repository review</button></div></section></div>}
-      {authOpen && <div className="dialog-backdrop"><section className="document-dialog auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title"><div className="dialog-heading"><div><p className="section-label">SECURE ACCOUNT</p><h2 id="auth-title">{authMode === "signin" ? "Sign in to DocuGuard" : "Create your account"}</h2></div><button className="icon-button" onClick={() => setAuthOpen(false)} aria-label="Close sign in">×</button></div>{hostedAuthReady ? <form className="auth-form" onSubmit={submitAuth}><label>Email address<input type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} /></label><label>Password<input type="password" autoComplete={authMode === "signin" ? "current-password" : "new-password"} minLength={10} required value={password} onChange={e => setPassword(e.target.value)} /></label>{authMode === "signup" && <label className="consent-row"><input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} /><span>I agree to the <button type="button" onClick={() => setPolicy("terms")}>Terms</button> and have read the <button type="button" onClick={() => setPolicy("privacy")}>Privacy Policy</button>.</span></label>}<button className="primary-button" type="submit">{authMode === "signin" ? "Sign in" : "Create account"}</button><button className="text-button" type="button" onClick={() => { setAuthMode(authMode === "signin" ? "signup" : "signin"); setAuthMessage(""); }}>{authMode === "signin" ? "New here? Create an account" : "Already registered? Sign in"}</button></form> : <p className="auth-message">Hosted accounts are not configured yet. Set the project URL and public publishable key, then rebuild the dashboard.</p>}{authMessage && <p className="auth-message" role="status">{authMessage}</p>}<p className="auth-caption">Sessions are managed by the hosted identity provider. The API checks the bearer token before analyzing a repository.</p></section></div>}
+      {authOpen && <div className="dialog-backdrop"><section className="document-dialog auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title"><div className="dialog-heading"><div><p className="section-label">SECURE ACCOUNT</p><h2 id="auth-title">{authMode === "signin" ? "Sign in to DocuGuard" : authMode === "signup" ? "Create your account" : authMode === "recover" ? "Reset your password" : "Set a new password"}</h2></div><button className="icon-button" onClick={() => setAuthOpen(false)} aria-label="Close sign in">×</button></div>{hostedAuthReady ? <form className="auth-form" onSubmit={submitAuth}>{authMode !== "set-password" && <label>Email address<input type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} /></label>}{authMode !== "recover" && <label>{authMode === "set-password" ? "New password" : "Password"}<input type="password" autoComplete={authMode === "signin" ? "current-password" : "new-password"} minLength={10} required value={password} onChange={e => setPassword(e.target.value)} /></label>}{authMode === "signup" && <label className="consent-row"><input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} /><span>I agree to the <button type="button" onClick={() => setPolicy("terms")}>Terms</button> and have read the <button type="button" onClick={() => setPolicy("privacy")}>Privacy Policy</button>.</span></label>}<button className="primary-button" type="submit">{authMode === "signin" ? "Sign in" : authMode === "signup" ? "Create account" : authMode === "recover" ? "Send reset link" : "Update password"}</button>{authMode === "signin" && <button className="text-button" type="button" onClick={() => { setAuthMode("recover"); setAuthMessage(""); }}>Forgot password?</button>}{(authMode === "signin" || authMode === "signup") && <button className="text-button" type="button" onClick={() => { setAuthMode(authMode === "signin" ? "signup" : "signin"); setAuthMessage(""); }}>{authMode === "signin" ? "New here? Create an account" : "Already registered? Sign in"}</button>}{(authMode === "recover" || authMode === "set-password") && <button className="text-button" type="button" onClick={() => { setAuthMode("signin"); setAuthMessage(""); }}>Back to sign in</button>}</form> : <p className="auth-message">Hosted accounts are not configured yet. Set the project URL and public publishable key, then rebuild the dashboard.</p>}{authMessage && <p className="auth-message" role="status">{authMessage}</p>}<p className="auth-caption">Sessions are managed by the hosted identity provider. The API checks the bearer token before analyzing a repository.</p></section></div>}
       {policy && <PolicyModal name={policy} onClose={() => setPolicy("")} />}
     </div>
   </div>;

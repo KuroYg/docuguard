@@ -10,7 +10,7 @@ from app.schemas import AnalysisResponse
 
 
 def sample_analysis():
-    """Build a deterministic finding fixture without shipping a demo endpoint."""
+    """Build a deterministic finding fixture from the production rule function."""
     before = "def calculate_shipping(subtotal):\n    return subtotal * 1.25\n"
     after = "def calculate_shipping(subtotal):\n    return subtotal * 1.5\n"
     documentation = "Shipping costs are calculated at 1.25 times the order subtotal."

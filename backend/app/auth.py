@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 VERIFY_TIMEOUT_SECONDS = 4
 
 
+class AuthProviderUnavailable(Exception):
+    """Signal that the identity provider cannot currently verify a session."""
+
+
 def auth_configuration() -> tuple[str, str] | None:
     """Return public project settings only when both are set and well-formed.
 
@@ -82,10 +86,21 @@ def _verify_with_supabase(token: str, config: tuple[str, str]) -> dict | None:
         with urlopen(request, timeout=VERIFY_TIMEOUT_SECONDS) as response:
             payload = json.loads(response.read(32_768).decode("utf-8"))
         return payload if isinstance(payload, dict) and payload.get("id") else None
-    except (HTTPError, URLError, TimeoutError, OSError, ValueError, UnicodeDecodeError) as error:
-        # Invalid credentials are normal; only log the exception class, never token or response.
+    except HTTPError as error:
+        # A provider's explicit auth rejection means the customer's token is
+        # invalid. Throttles and server errors are outages, so clients can retry.
         logger.info("Hosted token verification failed: %s", type(error).__name__)
-        return None
+        if error.code in {400, 401, 403}:
+            return None
+        raise AuthProviderUnavailable from error
+    except (URLError, TimeoutError, OSError) as error:
+        logger.info("Hosted token verification unavailable: %s", type(error).__name__)
+        raise AuthProviderUnavailable from error
+    except (ValueError, UnicodeDecodeError) as error:
+        # A malformed success response is a provider failure, not proof that
+        # the customer's credentials are wrong.
+        logger.warning("Hosted token verification returned an invalid response: %s", type(error).__name__)
+        raise AuthProviderUnavailable from error
 
 
 def _active_customer_profile(user_id: str, token: str, config: tuple[str, str]) -> bool | None:
@@ -148,7 +163,14 @@ async def hosted_auth_guard(request: FastAPIRequest, call_next):
         token = bearer_token_from_header(request.headers.get("authorization", ""))
         if not token:
             return JSONResponse(status_code=401, content={"detail": "Sign in to analyze a repository."}, headers={"WWW-Authenticate": "Bearer"})
-        user = await verify_bearer_token(token)
+        try:
+            user = await verify_bearer_token(token)
+        except AuthProviderUnavailable:
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Sign-in verification is temporarily unavailable. Try again shortly."},
+                headers={"Retry-After": "5"},
+            )
         if not user:
             return JSONResponse(status_code=401, content={"detail": "Your session is invalid or expired. Sign in again."}, headers={"WWW-Authenticate": "Bearer"})
         role = authorized_role(user)

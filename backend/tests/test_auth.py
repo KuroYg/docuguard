@@ -1,6 +1,6 @@
 """Authentication checks stay server-side and fail closed when configured."""
 
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 from app import auth
 
@@ -67,9 +67,35 @@ def test_provider_verification_returns_only_provider_user_claims(monkeypatch):
     assert auth._verify_with_supabase("signed", ("https://project.supabase.co", "anon"))["id"] == "user-123"
 
 
-def test_invalid_token_does_not_return_provider_response_body(monkeypatch):
-    monkeypatch.setattr(auth, "urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(URLError("private token leaked")))
+def test_provider_rejection_is_treated_as_an_invalid_session(monkeypatch):
+    def rejected(*_args, **_kwargs):
+        raise HTTPError("https://project.supabase.co/auth/v1/user", 401, "invalid", {}, None)
+
+    monkeypatch.setattr(auth, "urlopen", rejected)
     assert auth._verify_with_supabase("secret-token", ("https://project.supabase.co", "anon")) is None
+
+
+def test_provider_outage_is_not_misreported_as_an_invalid_session(monkeypatch):
+    monkeypatch.setattr(auth, "urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(URLError("private token leaked")))
+    try:
+        auth._verify_with_supabase("secret-token", ("https://project.supabase.co", "anon"))
+    except auth.AuthProviderUnavailable:
+        pass
+    else:
+        raise AssertionError("provider outage must be distinguishable from invalid credentials")
+
+
+def test_provider_throttle_is_reported_as_unavailable(monkeypatch):
+    def throttled(*_args, **_kwargs):
+        raise HTTPError("https://project.supabase.co/auth/v1/user", 429, "rate limited", {}, None)
+
+    monkeypatch.setattr(auth, "urlopen", throttled)
+    try:
+        auth._verify_with_supabase("signed-token", ("https://project.supabase.co", "anon"))
+    except auth.AuthProviderUnavailable:
+        pass
+    else:
+        raise AssertionError("provider throttling must be retryable")
 
 
 def test_health_route_is_not_marked_protected(monkeypatch):

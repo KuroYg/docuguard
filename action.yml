@@ -1,0 +1,29 @@
+name: DocuGuard documentation drift check
+description: Compare changed Python behavior with repository Markdown and report evidence in the pull request workflow.
+inputs:
+  fail-on-findings:
+    description: Fail the workflow when the deterministic rule finds a supported mismatch.
+    required: false
+    default: "false"
+outputs:
+  finding-count:
+    description: Number of evidence-backed findings in the pull request.
+    value: ${{ steps.analyze.outputs.finding-count }}
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Install the small analysis dependency
+      shell: bash
+      run: python -m pip install --disable-pip-version-check --no-input -r "${GITHUB_ACTION_PATH}/requirements-action.txt"
+    - name: Analyze the pull request
+      id: analyze
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        PYTHONPATH: ${{ github.action_path }}/backend
+        DOCUGUARD_FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}
+      run: python "${GITHUB_ACTION_PATH}/backend/app/action_runner.py"

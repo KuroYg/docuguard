@@ -9,8 +9,9 @@ That product cannot be turned into a useful public website by uploading the curr
 ## Current public-ready path
 
 - Publish the source on GitHub and use the included CI workflow to verify backend tests and the frontend build on each pull request.
+- Customers can install the root GitHub Action in a repository workflow. It runs in the customer's GitHub runner with `contents: read`, writes the review summary to that run, and sends no source to DocuGuard.
 - Customers run the local launcher from their own machine. Repository contents stay local.
-- Vercel, Render, and a public Supabase database are not required for that local product.
+- Vercel, Render, and a public Supabase database are not required for local use or the customer-run Action.
 
 ## Hosted product path
 

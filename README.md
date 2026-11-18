@@ -2,7 +2,7 @@
 
 **Find the documentation sentence a code change made stale, and show the proof.**
 
-DocuGuard is a local-first Python repository review tool. It compares two Git revisions, extracts changed Python functions with the AST, and checks those behavior changes against Markdown prose with original line numbers. Every result links the code excerpt and documentation sentence so a developer can verify it before editing anything.
+DocuGuard is a Python repository review tool with a local dashboard and a customer-run GitHub Action. It compares two Git revisions, extracts changed Python functions with the AST, and checks those behavior changes against Markdown prose with original line numbers. Each result links the code excerpt and documentation sentence so a developer can verify it before editing anything.
 
 > **Hosting boundary:** This branch is a local product, not a hosted scanning service. The API reads a repository path on the machine running it and must stay loopback-only. See [`docs/PUBLIC_LAUNCH_PLAN.md`](docs/PUBLIC_LAUNCH_PLAN.md) before deploying; putting this API behind Vercel, Render, or Supabase does not make the path-based scan safe for remote customers.
 
@@ -27,6 +27,37 @@ The dashboard includes Supabase email/password sign-up and sign-in. Local Supaba
 The database stores only an account ID, status, creation time, and deletion request. It intentionally does not save repository content or findings. Configure Supabase email verification, CAPTCHA/rate limits, a seven-day session timebox, and short-lived access JWTs in the provider console; the timebox setting is plan-dependent. **The Supabase project and migration are configured, but provider connectivity and a full account sign-in round trip have not been verified.** This is not a hosted multi-customer service. Follow `docs/HOSTED_OPERATIONS.md` for account setup and recovery guidance.
 
 The local analysis API accepts a folder path from the same machine, so it must remain loopback-only. Authentication does not make this path-based API safe to expose to the internet. A remote hosted version needs a separately designed GitHub App integration and isolated worker system. The GitHub Actions workflow in `.github/workflows/ci.yml` runs tests and builds on pull requests; it does not yet analyze customer pull requests.
+
+## Run DocuGuard on customer pull requests
+
+The root `action.yml` is a real customer workflow integration. It runs inside the customer's GitHub Actions job against their checked-out repository. The customer grants the job only `contents: read`; the action does not ask for a password, GitHub token, API key, or repository upload. It reads the exact base/head commit IDs from GitHub's pull request event, writes an evidence report to the job summary, and never modifies files. Findings do not fail the workflow unless `fail-on-findings: true` is set.
+
+Add a workflow such as `.github/workflows/docuguard.yml` to a Python repository:
+
+```yaml
+name: Documentation drift
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  docuguard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: KuroYg/docuguard@feature/docuguard-mvp
+        # Set true only if this focused rule should block the pull request.
+        with:
+          fail-on-findings: false
+```
+
+GitHub Actions authorizes each run within the repository that owns the workflow. The action's workflow token is read-only; there is no DocuGuard hosted account or server in this customer-run path. It is limited to the shipping-multiplier rule described below. Review its evidence before changing documentation.
 
 To end a signed-in user's sessions, choose **End all sessions**. Supabase revokes refresh tokens for all devices; already-issued access tokens last until their configured expiry. See the security guide for this limitation.
 
@@ -93,7 +124,7 @@ These links informed product positioning, not code reuse. DocuGuard does not cop
 1. Add rules for changed public function signatures and documented CLI options.
 2. Add a side-by-side patch preview and export a Markdown review artifact.
 3. Add opt-in local open-weight LLM explanations grounded only in deterministic evidence.
-4. Add a customer-installed GitHub Action or GitHub App after local accuracy and false-positive behavior are understood.
+4. Expand deterministic rules after measuring customer false-positive behavior; build the GitHub App only if a centralized hosted dashboard is still needed.
 
 ## Project layout
 
