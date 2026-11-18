@@ -4,6 +4,8 @@
 
 DocuGuard is a local-first Python repository review tool. It compares two Git revisions, extracts changed Python functions with the AST, and checks those behavior changes against Markdown prose with original line numbers. Every result links the code excerpt and documentation sentence so a developer can verify it before editing anything.
 
+> **Hosting boundary:** This branch is a local product, not a hosted scanning service. The API reads a repository path on the machine running it and must stay loopback-only. See [`docs/PUBLIC_LAUNCH_PLAN.md`](docs/PUBLIC_LAUNCH_PLAN.md) before deploying; putting this API behind Vercel, Render, or Supabase does not make the path-based scan safe for remote customers.
+
 ## Launch the complete local product
 
 Install Python 3 and Node.js, then run this from PowerShell in the project folder:
@@ -22,9 +24,9 @@ Stop the local release server by closing the DocuGuard Python process from Task 
 
 The dashboard includes Supabase email/password sign-up and sign-in. Local Supabase settings live in ignored `frontend/.env.local` and `backend/.env` files. Only the project's URL and public publishable key are used; never place a Supabase secret/service-role key in the browser or public repository. The migration at `backend/migrations/001_customer_accounts.sql` creates minimal account records with row-level security; repository content and analysis results are never stored there.
 
-The database stores only an account ID, status, creation time, and deletion request. It intentionally does not save repository content or findings. Configure Supabase email verification, CAPTCHA/rate limits, a seven-day session timebox, and short-lived access JWTs in the provider console; the timebox setting is plan-dependent. **This is a deployable local product, not a hosted multi-customer service. Hosted accounts, backups, lockout policy, alerts, and cloud recovery are not active until an operator creates and configures a provider project.** Follow `docs/HOSTED_OPERATIONS.md` for the setup and recovery checklist.
+The database stores only an account ID, status, creation time, and deletion request. It intentionally does not save repository content or findings. Configure Supabase email verification, CAPTCHA/rate limits, a seven-day session timebox, and short-lived access JWTs in the provider console; the timebox setting is plan-dependent. **The Supabase project and migration are configured, but provider connectivity and a full account sign-in round trip have not been verified.** This is not a hosted multi-customer service. Follow `docs/HOSTED_OPERATIONS.md` for account setup and recovery guidance.
 
-The local analysis API accepts a folder path from the same machine, so it must remain loopback-only. Authentication does not make this path-based API safe to expose to the internet. A remote hosted version needs a separately designed repository import and isolated worker system.
+The local analysis API accepts a folder path from the same machine, so it must remain loopback-only. Authentication does not make this path-based API safe to expose to the internet. A remote hosted version needs a separately designed GitHub App integration and isolated worker system. The GitHub Actions workflow in `.github/workflows/ci.yml` runs tests and builds on pull requests; it does not yet analyze customer pull requests.
 
 To end a signed-in user's sessions, choose **End all sessions**. Supabase revokes refresh tokens for all devices; already-issued access tokens last until their configured expiry. See the security guide for this limitation.
 
@@ -91,7 +93,7 @@ These links informed product positioning, not code reuse. DocuGuard does not cop
 1. Add rules for changed public function signatures and documented CLI options.
 2. Add a side-by-side patch preview and export a Markdown review artifact.
 3. Add opt-in local open-weight LLM explanations grounded only in deterministic evidence.
-4. Add a GitHub Action after local accuracy and false-positive behavior are understood.
+4. Add a customer-installed GitHub Action or GitHub App after local accuracy and false-positive behavior are understood.
 
 ## Project layout
 

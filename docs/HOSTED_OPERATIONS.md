@@ -18,7 +18,7 @@ No hosted multi-customer service is deployed from this workspace. A configured S
 4. In Supabase Auth URL settings, allow the local callback `http://127.0.0.1:8010/**` (and `http://localhost:8010/**` only if you use that hostname). Set the Site URL to the local app URL for local testing. For a later hosted domain, add only that exact HTTPS origin and callback.
 5. In Supabase Auth settings, require email verification, configure password policy, enable CAPTCHA/bot protection, tune auth rate limits, and set a **7-day time-boxed session**. Supabase documents time-box controls as Pro plan and above. Set access-token JWT expiry to 5–15 minutes to bound the post-revocation window. Do not enable production until cross-device sign-out and expiry flows pass in staging.
 6. Set `DOCUGUARD_AUTH_REQUIRED=true` in the API `.env` only after both API variables are present. Restart the API after changing environment files. Confirm a missing/expired bearer token gets 401 and an unavailable provider fails closed with 503. Partial, placeholder, or malformed settings also now fail closed rather than silently disabling auth.
-6. Add recovery email/identity verification and alert routing in the provider console. Establish a monitored on-call contact and test alert delivery; this codebase has no alert destination configured yet.
+7. Add recovery email/identity verification and alert routing in the provider console. Establish a monitored on-call contact and test alert delivery; this codebase has no alert destination configured yet.
 
 ## Lockout, session, and authorization controls
 
@@ -40,7 +40,7 @@ code backend/.env
 
 Paste the project URL and the same public anon/publishable key into both files, then change `DOCUGUARD_AUTH_REQUIRED=true` in `backend/.env`. Keep these local files untracked; `.gitignore` excludes `.env*` except the safe example files. Rebuild the frontend and restart the API so both processes load the new settings. Verify the UI says **Sign in**, register a test account, verify its email, sign in, and run the repository analysis. Also test an expired/invalid token and a disabled profile; both must be rejected by the API. Do not share screenshots that reveal keys or project IDs unnecessarily.
 
-The workspace currently has no Supabase project URL or key configured. The code and database migration are ready for configuration, but no real hosted account project has been provisioned or exercised from this workspace yet.
+The workspace has a Supabase project configured in ignored local environment files, and migration `001_customer_accounts.sql` completed successfully in the provider SQL editor. The auth API's network reachability and a full sign-up/sign-in round trip have not been verified; do not infer hosted auth readiness from the migration result alone. No Vercel or Render deployment is configured. See `PUBLIC_LAUNCH_PLAN.md` for the safe public release boundary and the additional GitHub App and worker architecture required before hosting repository scans.
 
 ## Database backup and incident recovery
 
